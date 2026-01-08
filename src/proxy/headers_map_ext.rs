@@ -10,6 +10,8 @@ use hyper::{
 };
 use std::{str::FromStr, time::SystemTime};
 
+use crate::cli::CLI;
+
 #[macro_export]
 macro_rules! in_headers {
     ($headers:expr, $name:expr, $($tokens:tt)+) => {
@@ -71,9 +73,6 @@ macro_rules! in_headers {
         $s.eq_ignore_ascii_case($val.as_bytes())
     };
 }
-
-pub const CACHE_TIME: i64 = 7200;
-
 #[ext(HeaderMapExt)]
 pub impl HeaderMap<HeaderValue> {
     fn set<K: IntoHeaderName>(&mut self, key: K, val: &'static str) {
@@ -190,7 +189,11 @@ pub impl HeaderMap<HeaderValue> {
                 }
             }
 
-            let age = if let Some(a) = age { a } else { CACHE_TIME };
+            let age = if let Some(a) = age {
+                a
+            } else {
+                CLI.cache_max_age as i64
+            };
 
             if age < 0 {
                 format!("{vis}, no-cache")
@@ -198,7 +201,7 @@ pub impl HeaderMap<HeaderValue> {
                 self.set_unchecked(DATE, httpdate::fmt_http_date(server_date));
                 format!(
                     "{vis}, max-age={}, must-revalidate, stale-while-revalidate=604800",
-                    age.min(CACHE_TIME)
+                    age.min(CLI.cache_max_age as i64)
                 )
             }
         };

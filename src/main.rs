@@ -5,7 +5,7 @@ use crate::{
 };
 use enable_ansi_support::enable_ansi_support;
 use tracing::{self, level_filters::LevelFilter};
-use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
+use tracing_subscriber::EnvFilter;
 
 mod cancelation_token;
 mod cli;

@@ -1,6 +1,7 @@
 use clap::{ Parser, Subcommand, builder::styling::{self, AnsiColor}, command};
 use std::path::PathBuf;
 use crate::{initable_static, maybe::UnifiedError};
+use human_units::{Duration, DurationError};
 
 pub const APP_NAME: &str = env!("CARGO_PKG_NAME");
 const APP_NAME_UPPER: &str = const_str::convert_ascii_case!(shouty_snake, APP_NAME);
@@ -81,6 +82,17 @@ pub struct Cli {
     )]
     pub dac: Option<PathBuf>,
 
+    /// Limit "Cache-Control: max-age" for patched responses
+    #[arg(
+        short = 't', 
+        long = "cache-max-age", 
+        env = const_str::concat!(APP_NAME_UPPER, "_CACHE_MAX_AGE"),
+        default_value = "2h",
+        value_name = "DURATION",
+        value_parser = parse_duration
+    )]
+    pub cache_max_age: u32,
+
     /// Log level (off, error, warn, info, debug, trace)
     #[arg(
         long = "log-level",
@@ -93,6 +105,10 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+fn parse_duration(s: &str) -> Result<u32, DurationError> {
+    s.parse::<Duration>().map(|d| d.as_secs() as u32)
 }
 
 fn parse_listen_address(mut input: &str) -> Result<(String, u16), UnifiedError> {

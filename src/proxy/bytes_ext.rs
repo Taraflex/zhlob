@@ -1,9 +1,7 @@
 use crate::{
-    cli::APP_NAME,
-    proxy::{
-        headers_map_ext::{CACHE_TIME, HeaderMapExt},
-        response_ext::BoxedResponse,
-    },
+    cli::{APP_NAME, CLI},
+    initable_static,
+    proxy::{headers_map_ext::HeaderMapExt, response_ext::BoxedResponse},
 };
 use bytes::Bytes;
 use easy_ext::ext;
@@ -12,7 +10,17 @@ use http_mitm_proxy::hyper::{
     self, Response, StatusCode, Version,
     header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, DATE},
 };
+use hyper::header::HeaderValue;
 use std::time::SystemTime;
+
+initable_static! {
+    NOBODY_CACHE_CONTROL: HeaderValue = || {
+        HeaderValue::from_str(&format!(
+            "private, max-age={}, must-revalidate, stale-while-revalidate=604800",
+            CLI.cache_max_age
+        )).unwrap()
+    };
+}
 
 #[ext(BytesExt)]
 pub impl Bytes {
@@ -25,14 +33,7 @@ pub impl Bytes {
             match status {
                 StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED => {
                     headers.set_unchecked(DATE, httpdate::fmt_http_date(SystemTime::now()));
-                    headers.set(
-                        CACHE_CONTROL,
-                        const_str::concat!(
-                            "private, max-age=",
-                            CACHE_TIME,
-                            ", must-revalidate, stale-while-revalidate=604800"
-                        ),
-                    );
+                    headers.insert(CACHE_CONTROL, NOBODY_CACHE_CONTROL.clone());
                 }
                 StatusCode::OK if mime.as_ref().starts_with("text/") => {
                     headers.set(

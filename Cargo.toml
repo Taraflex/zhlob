@@ -46,6 +46,7 @@ publicsuffix2 = "0.5.2"
 url = "2.5.7"
 ctor = "0.6.3"
 enable-ansi-support = "0.3.1"
+human-units = "0.5.3"
 
 [build-dependencies]
 pulldown-cmark = "0.13"

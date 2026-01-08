@@ -69,14 +69,14 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                     "referrer" | "viewport" => el.has_attribute("content"),
                     _ => {
                         let equiv = el.get_attribute("http-equiv");
-                        let is_forbidden_equiv = equiv
+                        let is_forbidden_or_empty_equiv = equiv
                             .as_deref()
                             .map(|e| {
                                 e.eq_ignore_ascii_case("X-UA-Compatible")
                                     || e.eq_ignore_ascii_case("Content-Type")
                             })
-                            .unwrap_or(false);
-                        !is_forbidden_equiv && el.has_attribute("content")
+                            .unwrap_or(true);
+                        !is_forbidden_or_empty_equiv && el.has_attribute("content")
                     }
                 };
 

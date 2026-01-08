@@ -1,4 +1,5 @@
 use crate::dac::psl::prepare_adblock_filter;
+use std::fmt;
 
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 #[repr(transparent)]
@@ -13,6 +14,40 @@ impl PatternType {
     pub const DomainEnd: PatternType = PatternType(3 << 28); //check [. or //] before
     pub const Substring: PatternType = PatternType(4 << 28);
     pub const AnyDomainPartBeforeETLD: PatternType = PatternType(5 << 28); //check [. or //] before and locate in part before etld (must be always thirdparty)
+}
+
+impl fmt::Display for PatternType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut rem = self.0;
+        let mut sep = "";
+        write!(f, "PatternType(")?;
+
+        for (mask, name) in [
+            (Self::NotThirdParty.0, "NotThirdParty"),
+            (Self::AnyDomainPartBeforeETLD.0, "AnyDomainPartBeforeETLD"),
+            (Self::DomainEnd.0, "DomainEnd"),
+            (Self::DomainEndWithDotPrefix.0, "DomainEndWithDotPrefix"),
+            (Self::Substring.0, "Substring"),
+            (Self::SlashedStart.0, "SlashedStart"),
+        ] {
+            if mask != 0 && (rem & mask) == mask {
+                write!(f, "{sep}{name}")?;
+                rem &= !mask;
+                sep = " | ";
+            }
+        }
+
+        if rem != 0 || sep.is_empty() {
+            write!(f, "{sep}{:#X}", rem)?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl fmt::Debug for PatternType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
 }
 
 impl PatternType {

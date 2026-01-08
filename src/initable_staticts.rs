@@ -32,17 +32,17 @@ macro_rules! initable_static {
 
     // --- Вспомогательный рендер логики OnceLock + Mutex ---
     (@render $name:ident, |$($arg:ident : $arg_ty:ty),*| -> Result<$ret_ty:ty, $err_ty:ty> $body:block) => {
-        static $name: std::sync::OnceLock<$ret_ty> = std::sync::OnceLock::new();
+        static $name: ::std::sync::OnceLock<$ret_ty> = ::std::sync::OnceLock::new();
 
         #[allow(non_snake_case)]
         pub mod $name {
             use super::*;
             pub fn init($($arg : $arg_ty),*) -> Result<&'static $ret_ty, $err_ty> {
-                static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+                static LOCK: ::parking_lot::Mutex<()> = ::parking_lot::Mutex::new(());
 
                 if let Some(val) = super::$name.get() { return Ok(val); }
 
-                let _guard = LOCK.lock().unwrap();
+                let _guard = LOCK.lock();
 
                 if let Some(val) = super::$name.get() { return Ok(val); }
 

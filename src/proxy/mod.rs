@@ -263,7 +263,7 @@ pub async fn run() -> Result<(), UnifiedError> {
         .path(BASE_DIRS.cache_dir().join(APP_NAME).join("certs_db"))
         .open()?;
 
-    let proxy = MitmProxy::new(load_root_issuer(), db);
+    let proxy = MitmProxy::new(load_root_issuer()?, db);
     let client = DefaultClient::new();
     let service = TowerToHyperService::new(ResponseBodyTimeout::new(
         ServiceBuilder::new()

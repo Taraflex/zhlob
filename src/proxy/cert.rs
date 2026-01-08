@@ -1,4 +1,4 @@
-use crate::{cli::APP_NAME, initable_static};
+use crate::{cli::APP_NAME, initable_static, maybe::UnifiedError};
 use directories::BaseDirs;
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, DnValue, IsCa, Issuer, KeyPair,
@@ -108,8 +108,8 @@ fn write_file_with_permissions(path: &Path, content: &[u8], description: &str) {
     }
 }
 
-pub fn load_root_issuer() -> Issuer<'static, KeyPair> {
-    let issuer = match (|| -> Result<Issuer<KeyPair>, Box<dyn std::error::Error + Send + Sync>> {
+pub fn load_root_issuer() -> Result<Issuer<'static, KeyPair>, UnifiedError> {
+    let issuer = match (|| -> Result<Issuer<KeyPair>, UnifiedError> {
         let cert_pem = fs::read_to_string(&CERT_PATHS.cert_pem_path)?;
         let key_pem = fs::read_to_string(&CERT_PATHS.key_pem_path)?;
         let signing_key = KeyPair::from_pem(&key_pem)?;
@@ -130,14 +130,14 @@ pub fn load_root_issuer() -> Issuer<'static, KeyPair> {
             params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
             params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
-            let signing_key = KeyPair::generate().unwrap();
+            let signing_key = KeyPair::generate()?;
             write_file_with_permissions(
                 &CERT_PATHS.key_pem_path,
                 signing_key.serialize_pem().as_bytes(),
                 "key PEM file",
             );
 
-            let cert = params.self_signed(&signing_key).unwrap();
+            let cert = params.self_signed(&signing_key)?;
             write_file_with_permissions(
                 &CERT_PATHS.cert_pem_path,
                 cert.pem().as_bytes(),
@@ -153,5 +153,5 @@ pub fn load_root_issuer() -> Issuer<'static, KeyPair> {
         }
     };
 
-    issuer
+    Ok(issuer)
 }

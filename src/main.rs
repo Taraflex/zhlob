@@ -26,7 +26,6 @@ fn main() -> Result<(), UnifiedError> {
         .without_time()
         .with_target(false)
         .with_writer(|| std::io::stderr())
-        .with_span_events(FmtSpan::ACTIVE)
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())

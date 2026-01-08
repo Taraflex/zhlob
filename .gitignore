@@ -1,0 +1,7 @@
+**/target
+*.dac
+*.dat
+*.bak
+*.txt
+*.html
+!custom_blocklist.txt

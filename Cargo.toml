@@ -1,0 +1,76 @@
+[package]
+name = "zhlob"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+brotli = "8.0.2"
+bytes = "1.11.0"
+clap = { version = "4.5.53", features = ["env", "derive", "color"] }
+const-str = { version = "0.7.1", features = ["case"] }
+directories = "6.0.0"
+easy-ext = "1.0.2"
+encoding_rs = { version = "0.8.35" }
+encoding_rs_io = "0.1.7"
+flate2 = { version = "1.1.5", features = ["zlib-rs"], default-features = false }
+http-body-util = { version = "0.1.3" }
+http-mitm-proxy = "0.16.0"
+httpdate = "1.0.3"
+hyper = "1.8.1"
+hyper-util = { version = "0.1.19", features = ["service"] }
+image = { version = "0.25.9", default-features = false, features = [
+    "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "nasm",
+] }
+libwebp-sys = "0.9.6"
+num_cpus = "1.17.0"
+rcgen = { version = "0.14.6", features = ["x509-parser"] }
+sled = "0.34.7"
+tokio = { version = "1.48.0", features = ["signal"] }
+tokio-rustls = "0.26.4"
+tokio-util = { version = "0.7.17", features = ["rt"] }
+tower = { version = "0.5.2", features = ["util"] }
+tower-http = { version = "0.6.8", features = ["timeout"] }
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+lol_html = "2.7.0"
+fastvec = "1.0.1"
+parking_lot = "0.12.5"
+memchr = "2.7.6"
+memmap2 = "0.9.9"
+daachorse = "1.0.0"
+publicsuffix2 = "0.5.2"
+url = "2.5.7"
+ctor = "0.6.3"
+enable-ansi-support = "0.3.1"
+
+[build-dependencies]
+pulldown-cmark = "0.13"
+
+[package.metadata.patch]
+crates = ["lol_html"]
+
+[patch.crates-io]
+lol_html = { path = './target/patch/lol_html-2.7.0' }
+
+[profile.dev]
+debug = 2
+lto = "off"
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.release]
+debug = 0
+strip = true
+split-debuginfo = "off"
+incremental = true
+
+[profile.dist]
+inherits = "release"
+incremental = false
+lto = "thin"
+codegen-units = 1

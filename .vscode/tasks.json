@@ -1,0 +1,81 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cargo build: debug",
+            "type": "cargo",
+            "command": "build",
+            "problemMatcher": ["$rustc"],
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent",
+                "clear": true
+            }
+        },
+        {
+            "label": "cargo build: release",
+            "type": "cargo",
+            "command": "build",
+            "args": ["--release"],
+            "problemMatcher": ["$rustc"],
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent",
+                "clear": true
+            }
+        },
+        {
+            "label": "cargo run dacgen",
+            "type": "cargo",
+            "command": "run",
+            "args": [
+                "--release",
+                "--",
+                "dacgen",
+                "easylist.txt",
+                "easyprivacy.txt",
+                "fanboy-cookiemonster.txt",
+                "custom_blocklist.txt",
+                "--psl",
+                "public_suffix_list.dat",
+                "--dump",
+                "blocklist.txt"
+            ],
+            "problemMatcher": ["$rustc"],
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent",
+                "clear": true
+            }
+        },
+        {
+            "label": "cargo run help",
+            "type": "cargo",
+            "command": "run",
+            "args": ["--", "--help"],
+            "problemMatcher": ["$rustc"],
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent",
+                "clear": true
+            }
+        },
+        {
+            "label": "cargo run dacgen help",
+            "type": "cargo",
+            "command": "run",
+            "args": ["--", "dacgen", "--help"],
+            "problemMatcher": ["$rustc"],
+            "group": "build",
+            "presentation": {
+                "panel": "shared",
+                "reveal": "silent",
+                "clear": true
+            }
+        }
+    ]
+}

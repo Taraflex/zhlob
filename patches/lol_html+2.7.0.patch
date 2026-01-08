@@ -1,0 +1,35 @@
+diff --git a/src/rewritable_units/tokens/attributes.rs b/src/rewritable_units/tokens/attributes.rs
+index 4fb17c4..d1078d7 100644
+--- a/src/rewritable_units/tokens/attributes.rs
++++ b/src/rewritable_units/tokens/attributes.rs
+@@ -25,7 +25,9 @@ pub enum AttributeNameError {
+     /// [`encoding`].
+     ///
+     /// [`encoding`]: ../struct.Settings.html#structfield.encoding
+-    #[error("The attribute name contains a character that can't be represented in the document's character encoding.")]
++    #[error(
++        "The attribute name contains a character that can't be represented in the document's character encoding."
++    )]
+     UnencodableCharacter,
+ }
+ 
+@@ -42,6 +44,19 @@ pub struct Attribute<'i> {
+     encoding: &'static Encoding,
+ }
+ 
++impl<'i> Attribute<'i> {
++    /// -
++    #[inline]
++    pub fn name_raw(&self) -> &[u8] {
++        &self.name
++    }
++    /// -
++    #[inline]
++    pub fn value_raw(&self) -> &[u8] {
++        &self.value
++    }
++}
++
+ impl<'i> Attribute<'i> {
+     #[inline]
+     #[must_use]

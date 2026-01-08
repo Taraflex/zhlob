@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "zhlob",
+            "type": "lldb",
+            "sourceLanguages": ["rust"],
+            "request": "launch",
+            "preLaunchTask": "cargo build: debug",
+            "program": "${workspaceFolder}/target/debug/zhlob",
+            "args": ["--dac", "blocklist.dac"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "dacgen",
+            "type": "lldb",
+            "sourceLanguages": ["rust"],
+            "request": "launch",
+            "preLaunchTask": "cargo build: debug",
+            "program": "${workspaceFolder}/target/debug/zhlob",
+            "args": [
+                "dacgen",
+                "easylist.txt",
+                "easyprivacy.txt",
+                "fanboy-cookiemonster.txt",
+                "custom_blocklist.txt",
+                "--psl",
+                "public_suffix_list.dat",
+                "--dump",
+                "blocklist.txt"
+            ],
+
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

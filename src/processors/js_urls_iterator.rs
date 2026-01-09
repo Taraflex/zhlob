@@ -192,6 +192,32 @@ fn is_ident_or_dot_or_whitespace_playground() {
         println!("Итого ошибок: {}", errors);
     }
 }*/
+/*
+use ctor::ctor;
+#[ctor]
+fn playground() {
+    const SS: &str = r#"'';"";'\'';"\"";'http://google.com/';
+window.i18nFetch = new Promise((res, rej) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/js/i18n/ru-compiled.json');
+            xhr.responseType = 'json';
+            xhr.onload = function(e) {
+              if (this.status === 200) {
+                res({ru: xhr.response});
+              } else {
+                rej(e);
+              }
+            };
+            xhr.send();
+          });    
+          
+"#;
+    for  s in JsUrlsIterator::new(SS.as_bytes()){
+        unsafe{
+        println!("{}", str::from_utf8_unchecked(s));
+        }
+    }
+}*/
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -348,13 +374,19 @@ impl<'a> Iterator for JsUrlsIterator<'a> {
                         regexp_allowed: false,
                     });
                 }
-                _quote @ (b'\'' | b'\"') => {
+                quote @ (b'\'' | b'\"') => {
                     let start = self.pos;
-                    if scan_to!(_quote) == 0 {
+                    let found = match quote {
+                        b'\'' => scan_to!(b'\''),
+                        b'\"' => scan_to!(b'\"'),
+                        _ => unreachable!("quote is always ' or \" due to the guard above"),
+                    };
+                    if found == 0 {
                         return None;
                     }
                     self.stack.last_mut()?.regexp_allowed = false;
-                    let may_be_url = &self.src[start..self.src.len().min(self.pos - 1)];
+                    let end = self.src.len().min(self.pos - 1);
+                    let may_be_url = &self.src[start..end];
                     if is_likely_url(may_be_url) {
                         return Some(may_be_url);
                     }

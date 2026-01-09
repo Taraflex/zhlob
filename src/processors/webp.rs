@@ -1,6 +1,6 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use crate::maybe::UnifiedError;
+use crate::{cli::CLI, maybe::UnifiedError};
 use image::{GrayAlphaImage, GrayImage, imageops::FilterType};
 use libwebp_sys::*;
 use std::{ptr, sync::OnceLock};
@@ -9,35 +9,44 @@ pub fn thumbnail(data: Vec<u8>) -> Result<Vec<u8>, UnifiedError> {
     let mut img = image::load_from_memory(&data)?;
     drop(data);
 
-    let (mut width, mut height) = (img.width(), img.height());
+    let (ow, oh) = (img.width(), img.height());
+    let min_orig = ow.min(oh) as f32;
 
-    width = (width / 2).max(1);
-    height = (height / 2).max(1);
+    let min: f32 = CLI.image_scale_limit[0] as f32;
+    let max: f32 = CLI.image_scale_limit[1] as f32;
+    let mut ratio: f32 = CLI.image_scale;
 
-    let min_side = width.min(height);
-    if min_side > 384 {
-        let scale_ratio = 384.0 / min_side as f32;
-        width = ((width as f32 * scale_ratio) as u32).max(1);
-        height = ((height as f32 * scale_ratio) as u32).max(1);
+    if min_orig * ratio < min {
+        ratio = min / min_orig;
+    }
+    if min_orig * ratio > max {
+        ratio = max / min_orig;
     }
 
-    img = img.resize_exact(
-        width,
-        height,
-        /*FilterType::Nearest*/ FilterType::CatmullRom,
-    );
+    if ratio > 1.0 {
+        ratio = 1.0;
+    }
 
-    Ok(if img.color().has_alpha() {
+    let nw = (ow as f32 * ratio).round() as u32;
+    let nh = (oh as f32 * ratio).round() as u32;
+
+    if nw != ow || nh != oh {
+        let i = img.resize_exact(nw, nh, FilterType::CatmullRom);
+        drop(img);
+        img = i;
+    }
+
+    let res = if img.color().has_alpha() {
         let luma = img.to_luma_alpha8();
         drop(img);
-
         encode_gray_alpha(&luma)?
     } else {
         let luma = img.to_luma8();
         drop(img);
-
         encode_gray(&luma)?
-    })
+    };
+
+    Ok(res)
 }
 
 /// Кодирует GrayImage (Luma8)

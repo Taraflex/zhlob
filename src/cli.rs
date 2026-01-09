@@ -23,7 +23,6 @@ macro_rules! if_empty {
     }};
 }
 
-
 #[derive(Subcommand)]
 pub enum Commands {
     /// Compile Adblock patterns to the simplified binary DAC file
@@ -52,8 +51,8 @@ pub enum Commands {
         .placeholder(AnsiColor::BrightYellow.on_default()),
 )]
 pub struct Cli {
-    /// Listen address [default: 127.0.0.1:5151]
-    /// Supports: 127.0.0.1:5151, :5151, http://127.0.0.1, etc.
+    /// Listen address
+    /// {formats: 127.0.0.1:5151, :5151, http://127.0.0.1, etc.}
     #[arg(
         short = 'L',
         long = "listen",
@@ -84,7 +83,6 @@ pub struct Cli {
 
     /// Limit "Cache-Control: max-age" for patched responses
     #[arg(
-        short = 't', 
         long = "cache-max-age", 
         env = const_str::concat!(APP_NAME_UPPER, "_CACHE_MAX_AGE"),
         default_value = "2h",
@@ -93,7 +91,28 @@ pub struct Cli {
     )]
     pub cache_max_age: u32,
 
-    /// Log level (off, error, warn, info, debug, trace)
+    /// Scale images keeping the shorter side within this range
+    /// {formats: "96..384", "..768" (1..768), "48.." (48..max_uint32), ".." (1..max_uint32)}
+    #[arg(
+        long = "image-scale", 
+        env = const_str::concat!(APP_NAME_UPPER, "_IMAGE_SCALE"),
+        default_value = "0.5",
+        value_name = "FLOAT",
+    )]
+    pub image_scale: f32,
+
+    /// Scale images keeping the shorter side within this range
+    /// {formats: "96..384", "..768" (1..768), "48.." (48..max_uint32), ".." (1..max_uint32)}
+    #[arg(
+        long = "image-scale-limit", 
+        env = const_str::concat!(APP_NAME_UPPER, "_IMAGE_SCALE_LIMIT"),
+        default_value = "96..384",
+        value_name = "MIN..MAX",
+        value_parser = parse_range
+    )]
+    pub image_scale_limit: [u32; 2],
+
+    /// Log level {off, error, warn, info, debug, trace}
     #[arg(
         long = "log-level",
         env = const_str::concat!(APP_NAME_UPPER, "_LOG_LEVEL"),
@@ -105,6 +124,28 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+
+fn parse_range(s: &str) -> Result<[u32; 2], UnifiedError> {
+    let (s_part, e_part) = s
+        .split_once("..")
+        .ok_or_else(|| format!("Invalid format '{}'. Use 'MIN..MAX'", s))?;
+
+    let s_val = if_empty!(s_part.trim_ascii(), "1");
+    let e_val = if_empty!(e_part.trim_ascii(), &u32::MAX.to_string());
+
+    let start = s_val
+        .parse::<u32>()?;
+
+    let end = e_val
+        .parse::<u32>()?;
+
+    if end < start {
+        return Err(format!("MIN ({}) must be <= MAX ({})", start, end).into());
+    }
+
+    Ok([start, end])
 }
 
 fn parse_duration(s: &str) -> Result<u32, DurationError> {

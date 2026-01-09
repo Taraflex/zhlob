@@ -12,9 +12,11 @@ pub fn thumbnail(data: Vec<u8>) -> Result<Vec<u8>, UnifiedError> {
     let (ow, oh) = (img.width(), img.height());
     let min_orig = ow.min(oh) as f32;
 
-    let min: f32 = CLI.image_scale_limit[0] as f32;
-    let max: f32 = CLI.image_scale_limit[1] as f32;
-    let mut ratio: f32 = CLI.image_scale;
+    let cli = &*CLI;
+
+    let min: f32 = cli.image_scale_limit[0] as f32;
+    let max: f32 = cli.image_scale_limit[1] as f32;
+    let mut ratio: f32 = cli.image_scale;
 
     if min_orig * ratio < min {
         ratio = min / min_orig;

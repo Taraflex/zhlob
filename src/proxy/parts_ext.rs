@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use crate::{
-    in_headers, proxy::bytes_ext::BytesExt, proxy::headers_map_ext::HeaderMapExt,
+    cli::CLI, in_headers, proxy::bytes_ext::BytesExt, proxy::headers_map_ext::HeaderMapExt,
     proxy::response_ext::BoxedResponse,
 };
 use bytes::Bytes;
@@ -114,7 +114,8 @@ pub impl Parts {
             return m.0;
         }
 
-        let v = self.can_be_patched(None)
+        let v = CLI.rechunk_html_size > 0
+            && self.can_be_patched(None)
             && in_headers!(self.headers, CONTENT_TYPE, "text/html"*)
             && !in_headers!(self.headers, ACCEPT_RANGES, "bytes");
 
@@ -122,8 +123,10 @@ pub impl Parts {
         v
     }
 
-    fn response_from_bytes(mut self, body: Bytes, chunk_size: usize) -> BoxedResponse {
+    fn response_from_bytes(mut self, body: Bytes) -> BoxedResponse {
         self.headers.normalize_extra_for_patched_content(true);
+
+        let chunk_size = CLI.rechunk_html_size;
 
         let len = body.len();
         if len > chunk_size && self.must_be_rechunkified() {
@@ -144,20 +147,21 @@ pub impl Parts {
         }
     }
 
-    fn response_from_incoming(mut self, body: Incoming, chunk_size: usize) -> BoxedResponse {
+    fn response_from_incoming(mut self, body: Incoming) -> BoxedResponse {
         if self.must_be_rechunkified() {
             //for none RANGE responses rechunkify and send as chunked response
-            self.response_from_stream(BodyStream::new(body), chunk_size)
+            self.response_from_stream(BodyStream::new(body))
         } else {
             Response::from_parts(self, BoxBody::new(body))
         }
     }
 
-    fn response_from_stream<S>(mut self, stream: S, chunk_size: usize) -> BoxedResponse
+    fn response_from_stream<S>(mut self, stream: S) -> BoxedResponse
     where
         S: Stream<Item = Result<Frame<Bytes>, hyper::Error>> + Send + Sync + 'static,
     {
         if self.must_be_rechunkified() {
+            let chunk_size = CLI.rechunk_html_size;
             //for none RANGE responses rechunkify and send as chunked response
             self.remove(CONTENT_LENGTH);
             Response::from_parts(

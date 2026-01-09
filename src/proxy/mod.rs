@@ -67,9 +67,16 @@ async fn handler(
     up_some!(req.process_mitm_it()?);
 
     let accept = req.normalize_and_get_accept();
-    up_some!(req.skip_if_browser_has_cached(&accept));
 
-    up_some!(req.skip_media_or_favicon(&accept));
+    let cli = &*CLI;
+    
+    if cli.fast_304 {
+        up_some!(req.skip_if_browser_has_cached(&accept));
+    }
+
+    if cli.skip_aux_resources {
+        up_some!(req.skip_media_or_favicon(&accept));
+    }
 
     req.normalize_headers();
 
@@ -86,20 +93,20 @@ async fn handler(
         parts.set(CACHE_CONTROL, "no-cache");
     }
 
-    const CHUNK_SIZE: usize = 1360;
-    const PAYLOAD_LIMIT: usize = 5 * 1024 * 1024;
-
     if upgrade.is_none() && !matches!(req_method, Method::HEAD | Method::TRACE) {
         // проверка chunked: curl -v -k --http1.1 --proxy http://127.0.0.1:5151 --trace-ascii - http://httpbin.org/stream/5
-
+        let payload_limit: usize = cli.transform_limit;
         let content_length: usize = parts.headers.get_as(CONTENT_LENGTH);
-
-        if parts.can_be_patched(Some(&req_headers))/* проверяем первым чтобы мемоизировать can_be_patched с данными из req_headers */ && (content_length > CHUNK_SIZE || content_length == 0/* chunked response */) && content_length < PAYLOAD_LIMIT
+        // can_be_patched проверяем первым чтобы мемоизировать can_be_patched с данными из req_headers 
+        if parts.can_be_patched(Some(&req_headers)) && content_length <= payload_limit
         {
-            up_some!(parts.skip_media_or_font_or_favicon());
+            if cli.skip_aux_resources {
+                up_some!(parts.skip_media_or_font_or_favicon());
+            }
 
-            if in_headers!(parts.headers, CONTENT_TYPE, "text/html"*)
-                || (!accept.starts_with("text/") //browser open in new tab
+            if (cli.clear_html && in_headers!(parts.headers, CONTENT_TYPE, "text/html"*))
+                || (cli.image_scale > 0.0 
+                && !accept.starts_with("text/") //browser open in new tab
                 && accept.contains("image/webp")
                 && in_headers!(
                     parts.headers,
@@ -118,14 +125,14 @@ async fn handler(
                         let frame = result?;
 
                         if let Ok(data) = frame.into_data() {
-                            if buffer.len() + data.len() > PAYLOAD_LIMIT {
+                            if buffer.len() + data.len() > payload_limit {
                                 // ПРЕВЫШЕНИЕ: Склеиваем и выходим
                                 let prefix = buffer.freeze();
                                 let combined_stream = stream::once(ready(Ok(Frame::data(prefix))))
                                     .chain(stream::once(ready(Ok(Frame::data(data)))))
                                     .chain(body_stream);
 
-                                return Ok(parts.response_from_stream(combined_stream, CHUNK_SIZE));
+                                return Ok(parts.response_from_stream(combined_stream));
                             }
                             buffer.extend_from_slice(&data);
                         } else {
@@ -139,7 +146,7 @@ async fn handler(
                     if bytes.is_empty() {
                         parts.remove(TRANSFER_ENCODING);
                         parts.remove(CONTENT_ENCODING);
-                        return Ok(parts.response_from_bytes(bytes, CHUNK_SIZE));
+                        return Ok(parts.response_from_bytes(bytes));
                     }
 
                     let text_encoding = if in_headers!(parts.headers, CONTENT_TYPE, "image/"*) {
@@ -159,8 +166,8 @@ async fn handler(
                         };
                     }
 
-                    let js_allowed =
-                        text_encoding.is_some() && parts.headers.csp_allow_inline_js_in_attrs();
+                    let async_load_styles =
+                        text_encoding.is_some() && cli.rechunk_html_size > 0 && parts.headers.csp_allow_inline_js_in_attrs();
 
                     let (result_compression_algo, processed_bytes, content_type_changed) =
                     tokio::task::spawn_blocking(
@@ -178,11 +185,11 @@ async fn handler(
                                 let mut html = String::new();
 
                                 Ok(match html_reader.read_to_string(&mut html) {
-                                    Ok(_) => {
-                                        let ligth_patched = html::minify(html, js_allowed, &uri);
+                                    Ok(_) => {                                      
+                                        let patched_html = html::minify(html, async_load_styles, &uri);
                                         c_guard!();
                                         let (_0, _1) = CompressionAlgo::from_req_headers(&req_headers)
-                                            .try_compress(ligth_patched);
+                                            .try_compress(patched_html);
                                         (_0, _1, true)
                                     }
                                     Err(e) => {
@@ -234,12 +241,12 @@ async fn handler(
                         parts.remove(CONTENT_ENCODING);
                     }
 
-                    return Ok(parts.response_from_bytes(processed_bytes, CHUNK_SIZE));
+                    return Ok(parts.response_from_bytes(processed_bytes));
                 }
             }
         }
     }
-    Ok(parts.response_from_incoming(body_incoming, CHUNK_SIZE))
+    Ok(parts.response_from_incoming(body_incoming))
 }
 
 async fn gracefull_shutdown_handler(

@@ -1,4 +1,5 @@
 use crate::{
+    cli::CLI,
     dac::{self, UrlBaseInfo, psl},
     initable_static, maybe,
     resettable_lazy::ResettableLazy,
@@ -14,7 +15,7 @@ initable_static! {
     FINDER_UPPER: Finder<'static> = || { Finder::new(b"</SCRIPT") };
 }
 
-pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str) -> String {
+pub fn minify<'a>(html: String, async_load_styles: bool, uri: &'a str) -> String {
     let base_info: RefCell<Option<String>> = None.into();
     let etld_1_info = ResettableLazy::new(|| -> Option<UrlBaseInfo> {
         let url = Url::parse(&uri).ok()?;
@@ -52,6 +53,7 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
             }
         };
     }
+    let can_scale_image = CLI.image_scale > 0.0;
     let source_bytes: &[u8] = html.as_ref();
     let settings = RewriteStrSettings {
         element_content_handlers: vec![
@@ -100,7 +102,7 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                     rel == "preload" && el.get_attribute("as").as_deref() == Some("style");
 
                 if rel == "manifest" || like_style || is_style {
-                    if !like_style || !csp_allow_inline_js_in_attrs {
+                    if !like_style || !async_load_styles {
                         // на rel="preload" могут висеть js события, их все не перечислить, поэтому не чистим rel="preload"
                         drop_attrs_except!(
                             el,
@@ -113,7 +115,7 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                                 | b"disabled"
                         );
                     }
-                    if csp_allow_inline_js_in_attrs && is_style && !el.has_attribute("disabled") {
+                    if async_load_styles && is_style && !el.has_attribute("disabled") {
                         el.set_attribute("rel", "preload")?;
                         el.set_attribute("as", "style")?;
                         el.set_attribute("onload", "this.rel='stylesheet'")?;
@@ -161,7 +163,9 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                 Ok(())
             }),
             element!("img[decoding]", |el| {
-                el.remove_attribute("decoding"); // мы уже радикально жмем картинки
+                if can_scale_image {
+                    el.remove_attribute("decoding"); // мы уже радикально жмем картинки
+                }
                 Ok(())
             }),
             element!("img[loading='eager'], iframe[loading='eager']", |el| {
@@ -169,8 +173,9 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                 Ok(())
             }),
             element!("img[srcset]", |el| {
-                if let Some(srcset) = el.get_attribute("srcset") {
-                    let smallest_url = srcset
+                if can_scale_image {
+                    if let Some(srcset) = el.get_attribute("srcset") {
+                        let smallest_url = srcset
                         .split(',')
                         .filter_map(|part| {
                             let mut iter = part.trim_ascii().split_ascii_whitespace();
@@ -189,13 +194,14 @@ pub fn minify<'a>(html: String, csp_allow_inline_js_in_attrs: bool, uri: &'a str
                         .min_by_key(|&(_, weight)| weight)
                         .map(|(url, _)| url);
 
-                    if let Some(url) = smallest_url {
-                        let _ = el.set_attribute("src", url);
+                        if let Some(url) = smallest_url {
+                            let _ = el.set_attribute("src", url);
+                        }
                     }
-                }
 
-                el.remove_attribute("srcset");
-                el.remove_attribute("sizes");
+                    el.remove_attribute("srcset");
+                    el.remove_attribute("sizes");
+                }
                 Ok(())
             }),
             element!("a", |el| {

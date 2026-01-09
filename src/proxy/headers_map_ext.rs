@@ -189,11 +189,9 @@ pub impl HeaderMap<HeaderValue> {
                 }
             }
 
-            let age = if let Some(a) = age {
-                a
-            } else {
-                CLI.cache_max_age as i64
-            };
+            let cache_max_age = CLI.cache_max_age as i64;
+
+            let age = if let Some(a) = age { a } else { cache_max_age };
 
             if age < 0 {
                 format!("{vis}, no-cache")
@@ -201,7 +199,7 @@ pub impl HeaderMap<HeaderValue> {
                 self.set_unchecked(DATE, httpdate::fmt_http_date(server_date));
                 format!(
                     "{vis}, max-age={}, must-revalidate, stale-while-revalidate=604800",
-                    age.min(CLI.cache_max_age as i64)
+                    age.min(cache_max_age)
                 )
             }
         };

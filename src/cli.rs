@@ -8,7 +8,6 @@ use human_units::{Duration, DurationError, Size};
 use std::path::PathBuf;
 
 pub const APP_NAME: &str = env!("CARGO_PKG_NAME");
-const APP_NAME_UPPER: &str = const_str::convert_ascii_case!(shouty_snake, APP_NAME);
 
 initable_static! {
     CLI:Cli = || {
@@ -48,11 +47,13 @@ macro_rules! define_cli {
         pub struct $struct_name {
             $(
                 $(#[$doc])*
+                #[arg(
+                    long,
+                    env = const_str::convert_ascii_case!(shouty_snake, const_str::concat!(APP_NAME, "_", stringify!($name)))
+                )]
                 // Branch for: name => bool
                 $(
                     #[arg(
-                        long,
-                        env = const_str::concat!(APP_NAME_UPPER, "_", const_str::convert_ascii_case!(shouty_snake, stringify!($name))),
                         default_value_t = true,
                         action = clap::ArgAction::Set,
                         num_args = 0..=1,
@@ -97,8 +98,6 @@ define_cli! {
         /// Listen address {formats: 127.0.0.1:5151, :5151, http://127.0.0.1, etc.}
         listen((String, u16)) => (
             short = 'L',
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_LISTEN"),
             default_value = "127.0.0.1:5151",
             value_name = "ADDR",
             value_parser = parse_listen_address
@@ -107,23 +106,17 @@ define_cli! {
         /// Custom Public Suffix List file (use '-' for stdin)
         psl(Option<PathBuf>) => (
             short,
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_PSL"),
             value_name = "PSL",
             global = true
         ),
 
         /// DAC binary file
         dac(Option<PathBuf>) => (
-            short,
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_DAC")
+            short
         ),
 
         /// Limit "Cache-Control: max-age" for transformed responses
         cache_max_age(u32) => (
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_CACHE_MAX_AGE"),
             default_value = "2h",
             value_name = "DURATION",
             value_parser = parse_duration
@@ -140,16 +133,12 @@ define_cli! {
 
         /// Scale images keeping the shorter side within this range (set to 0 to disable image processing) {formats: "96..384", "..768" (1..768), "48.." (48..max_uint32), ".." (1..max_uint32)}
         image_scale(f32) => (
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_IMAGE_SCALE"),
             default_value = "0.5",
             value_name = "FLOAT",
         ),
 
         /// Scale images keeping the shorter side within this range {formats: "96..384", "..768" (1..768), "48.." (48..max_uint32), ".." (1..max_uint32)}
         image_scale_limit([u32; 2]) => (
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_IMAGE_SCALE_LIMIT"),
             default_value = "96..384",
             value_name = "MIN..MAX",
             value_parser = parse_range
@@ -157,8 +146,6 @@ define_cli! {
 
         /// Rechankify html to speed up partial rendering in browsers (set to 0 to disable chunking)
         rechunk_html_size(usize) => (
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_RECHUNK_HTML_SIZE"),
             default_value = "1360",
             value_name = "SIZE",
             value_parser = parse_size
@@ -166,8 +153,6 @@ define_cli! {
 
         /// html/images larger than this will be proxied as-is without transformation
         transform_limit(usize) => (
-            long,
-            env = const_str::concat!(APP_NAME_UPPER, "_TRANSFORM_LIMIT"),
             default_value = "5m",
             value_name = "SIZE",
             value_parser = parse_size
@@ -175,8 +160,6 @@ define_cli! {
 
         /// Log level {off, error, warn, info, debug, trace}
         log_level(String) => (
-            long,
-            env,
             default_value = "info",
             value_name = "LEVEL",
             global = true

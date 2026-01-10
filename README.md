@@ -1,4 +1,4 @@
-# Zhlob (жлоб)
+# Zhlob (Жлоб)
 
 Zhlob is a specialized MITM (Man-in-the-Middle) proxy server designed to breathe life back into the modern, bloated web when browsing over extremely narrow or high-latency data channels. It surgically strips down and re-packs web content to minimize every possible byte while maintaining core site functionality.
 ## Core Philosophy: Reviving the Web for Slow Connections

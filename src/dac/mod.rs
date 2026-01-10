@@ -12,12 +12,32 @@ pub mod pattern_type;
 pub mod patterns_map;
 pub mod psl;
 
+const fn mix_version_into_hash(body_hash: u64) -> u64 {
+    const APP_HASH: u64 =
+        xxhash_rust::const_xxh3::xxh3_64_with_seed(env!("CARGO_PKG_VERSION").as_bytes(), 0);
+
+    body_hash
+        ^ (APP_HASH
+            .wrapping_add(0x9e3779b97f4a7c15)
+            .wrapping_add(body_hash << 6)
+            .wrapping_add(body_hash >> 2))
+}
+
 initable_static! {
-    DAC = |path: &PathBuf| -> Result<DoubleArrayAhoCorasick<u32>, maybe::UnifiedError> {
+    DAC = |path: &PathBuf| -> Result<(String, DoubleArrayAhoCorasick<u32>), maybe::UnifiedError> {
         let file = File::open(path)?;
         unsafe {
             let mmap = Mmap::map(&file)?;
-            Ok(DoubleArrayAhoCorasick::<u32>::deserialize_unchecked(&mmap).0)
+            if mmap.len() < 20 {
+                return Err("DAC file too short".into());
+            }
+            if !mmap[0..4].eq(&[b'D', b'A', b'C', 1]) {
+                return Err("Invalid DAC file format version".into());
+            }
+            let h3 = mix_version_into_hash(u64::from_le_bytes(mmap[4..12].try_into()?));
+            use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+            Ok((format!("zhlob~{}~", URL_SAFE_NO_PAD.encode(h3.to_le_bytes())), DoubleArrayAhoCorasick::<u32>::deserialize_unchecked(&mmap[12..]).0))
         }
     }
 }
@@ -50,7 +70,11 @@ pub fn is_match_src<'a>(
     src: &'a [u8],
     etld_1_info: &ResettableLazy<'_, Option<UrlBaseInfo>>,
 ) -> bool {
-    if let Some(dac) = DAC.get() {
+    if let Some((_, dac)) = DAC.get() {
+        unsafe {
+            println!("{}", str::from_utf8_unchecked(src));
+        }
+        //todo check join with url without protocols like //google.com
         if let Some(url_info) = etld_1_info.get() {
             let Some(url) = maybe!(url_info.base.join(str::from_utf8(src)?)?) else {
                 return false;
@@ -68,6 +92,11 @@ pub fn is_match_src<'a>(
                             && (!p.is_third_party()
                                 || !is_subdomain_or_equal(host, &url_info.etld_plus1))
                         {
+                            println!(
+                                "blocked by rule: {:?} {}",
+                                p,
+                                src[m.start()..m.end()].to_string()
+                            );
                             return true;
                         }
                     }

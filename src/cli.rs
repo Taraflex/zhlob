@@ -122,9 +122,6 @@ define_cli! {
             value_parser = parse_duration
         ),
 
-        /// Clear html of advertising scripts and browser-insignificant tags and attributes
-        clear_html => bool,
-
         /// Return 304 Not Modified for media and previously transformed content without upstream requests
         fast_304 => bool,
 
@@ -144,8 +141,11 @@ define_cli! {
             value_parser = parse_range
         ),
 
+        /// Clean html of advertising scripts and browser-insignificant tags and attributes
+        html_clean => bool,
+
         /// Rechankify html to speed up partial rendering in browsers (set to 0 to disable chunking)
-        rechunk_html_size(usize) => (
+        html_rechunk_size(usize) => (
             default_value = "1360",
             value_name = "SIZE",
             value_parser = parse_size

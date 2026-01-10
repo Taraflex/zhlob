@@ -9,7 +9,7 @@ use crate::{
 use bytes::Bytes;
 use easy_ext::ext;
 use hyper::{
-    Request, StatusCode,
+    Method, Request, StatusCode,
     header::{ACCEPT, CONNECTION, IF_MODIFIED_SINCE, IF_NONE_MATCH, PROXY_AUTHORIZATION, UPGRADE},
 };
 
@@ -28,7 +28,9 @@ pub impl<T> Request<T> {
         headers.remove(PROXY_AUTHORIZATION);
         headers.remove("Proxy-Connection");
         headers.remove("Keep-Alive");
+        headers.strip_etag_marker();
     }
+
     fn normalize_and_get_accept(&mut self) -> String {
         let headers = self.headers_mut();
         if !in_headers!(headers, CONNECTION, *"upgrade"*) {
@@ -79,12 +81,14 @@ pub impl<T> Request<T> {
 
     fn skip_if_browser_has_cached(&self, accept: &str) -> Option<BoxedResponse> {
         let h = self.headers();
-        if in_headers!(h, IF_NONE_MATCH, "W/\"zhlob-"*)
-            || ((h.contains_key(IF_MODIFIED_SINCE) || h.contains_key(IF_NONE_MATCH))
-                && matches!(
-                    &accept.as_bytes()[..accept.len().min(6)],
-                    b"image/" | b"video/" | b"audio/"
-                ))
+
+        if *self.method() == Method::GET
+            && (in_headers!(h, IF_NONE_MATCH, *"zhlob~"*)
+                || (h.contains_key(IF_MODIFIED_SINCE) || h.contains_key(IF_NONE_MATCH))
+                    && matches!(
+                        &accept.as_bytes()[..accept.len().min(6)],
+                        b"image/" | b"video/" | b"audio/"
+                    ))
         {
             Some(Bytes::new().to_response(self.version(), StatusCode::NOT_MODIFIED, ""))
         } else {
@@ -93,27 +97,26 @@ pub impl<T> Request<T> {
     }
 
     fn skip_media_or_favicon(&self, accept: &str) -> Option<BoxedResponse> {
-        let is_favicon = {
-            let path = self.uri().path();
-            if path.len() >= 12 && path[..8].eq_ignore_ascii_case("/favicon") {
-                if let Some(dot_pos) = path.rfind('.') {
-                    let extension = &path[dot_pos + 1..];
-                    extension.eq_ignore_ascii_case("ico")
-                        || extension.eq_ignore_ascii_case("png")
-                        || extension.eq_ignore_ascii_case("gif")
+        if *self.method() == Method::GET
+            && ({
+                //is_favicon
+                let path = self.uri().path();
+                if path.len() >= 12 && path[..8].eq_ignore_ascii_case("/favicon") {
+                    if let Some(dot_pos) = path.rfind('.') {
+                        let extension = &path[dot_pos + 1..];
+                        extension.eq_ignore_ascii_case("ico")
+                            || extension.eq_ignore_ascii_case("png")
+                            || extension.eq_ignore_ascii_case("gif")
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
-            } else {
-                false
-            }
-        };
-
-        if is_favicon
-            || matches!(
+            } || matches!(
                 &accept.as_bytes()[..accept.len().min(6)],
                 b"video/" | b"audio/"
-            )
+            ))
         {
             Some(Bytes::new().to_response(self.version(), StatusCode::NO_CONTENT, ""))
         } else {

@@ -80,9 +80,9 @@ async fn handler(
 
     req.normalize_headers();
 
+    let req_headers = req.headers().clone();
     let uri = req.uri().to_string();
     let req_method = req.method().clone();
-    let req_headers = req.headers().clone();
 
     let (res, upgrade) = client.send_request(req).await?;
     let (mut parts, body_incoming) = res.into_parts();
@@ -93,18 +93,17 @@ async fn handler(
         parts.set(CACHE_CONTROL, "no-cache");
     }
 
-    if upgrade.is_none() && !matches!(req_method, Method::HEAD | Method::TRACE) {
+    // can_be_patched проверяем до content_length, чтобы мемоизировать can_be_patched с данными из req_headers 
+    if upgrade.is_none() && matches!(req_method, Method::GET | Method::POST) && parts.can_be_patched(Some(&req_headers)) {
         // проверка chunked: curl -v -k --http1.1 --proxy http://127.0.0.1:5151 --trace-ascii - http://httpbin.org/stream/5
-        let payload_limit: usize = cli.transform_limit;
         let content_length: usize = parts.headers.get_as(CONTENT_LENGTH);
-        // can_be_patched проверяем первым чтобы мемоизировать can_be_patched с данными из req_headers 
-        if parts.can_be_patched(Some(&req_headers)) && content_length <= payload_limit
+        if content_length <= cli.transform_limit
         {
             if cli.skip_aux_resources {
                 up_some!(parts.skip_media_or_font_or_favicon());
             }
 
-            if (cli.clear_html && in_headers!(parts.headers, CONTENT_TYPE, "text/html"*))
+            if (cli.html_clean && in_headers!(parts.headers, CONTENT_TYPE, "text/html"*))
                 || (cli.image_scale > 0.0 
                 && !accept.starts_with("text/") //browser open in new tab
                 && accept.contains("image/webp")
@@ -125,7 +124,7 @@ async fn handler(
                         let frame = result?;
 
                         if let Ok(data) = frame.into_data() {
-                            if buffer.len() + data.len() > payload_limit {
+                            if buffer.len() + data.len() > cli.transform_limit {
                                 // ПРЕВЫШЕНИЕ: Склеиваем и выходим
                                 let prefix = buffer.freeze();
                                 let combined_stream = stream::once(ready(Ok(Frame::data(prefix))))
@@ -167,7 +166,7 @@ async fn handler(
                     }
 
                     let async_load_styles =
-                        text_encoding.is_some() && cli.rechunk_html_size > 0 && parts.headers.csp_allow_inline_js_in_attrs();
+                        text_encoding.is_some() && cli.html_rechunk_size > 0 && parts.headers.csp_allow_inline_js_in_attrs();
 
                     let (result_compression_algo, processed_bytes, content_type_changed) =
                     tokio::task::spawn_blocking(
@@ -240,6 +239,8 @@ async fn handler(
                     } else {
                         parts.remove(CONTENT_ENCODING);
                     }
+
+                    
 
                     return Ok(parts.response_from_bytes(processed_bytes));
                 }

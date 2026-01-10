@@ -32,7 +32,7 @@ macro_rules! initable_static {
 
     // --- Вспомогательный рендер логики OnceLock + Mutex ---
     (@render $name:ident, |$($arg:ident : $arg_ty:ty),*| -> Result<$ret_ty:ty, $err_ty:ty> $body:block) => {
-        static $name: ::std::sync::OnceLock<$ret_ty> = ::std::sync::OnceLock::new();
+        pub static $name: ::std::sync::OnceLock<$ret_ty> = ::std::sync::OnceLock::new();
 
         #[allow(non_snake_case)]
         pub mod $name {

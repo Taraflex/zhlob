@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use xxhash_rust::xxh3::Xxh3;
 
 fn is_valid_domain_part_with_dot(s: &str) -> bool {
     let b = s.as_bytes();
@@ -336,6 +337,7 @@ pub fn run(args: &Commands) -> Result<(), UnifiedError> {
                 patterns.len()
             );
 
+            let mut hasher = Xxh3::with_seed(0);
             if let Some(output_list) = dump {
                 let writer: Box<dyn Write> = if *output_list == dash_path {
                     Box::new(io::stdout())
@@ -344,12 +346,18 @@ pub fn run(args: &Commands) -> Result<(), UnifiedError> {
                 };
                 let mut buffered_writer = BufWriter::new(writer);
                 for (p, _) in &patterns {
+                    hasher.update(p.as_bytes());
                     writeln!(buffered_writer, "{}", p)?;
                 }
                 buffered_writer.flush()?;
+            } else {
+                for (p, _) in &patterns {
+                    hasher.update(p.as_bytes());
+                }
             }
 
             drop(patterns);
+            let h3: u64 = hasher.digest();
 
             {
                 let mut writer: Box<dyn Write> = if *dac == dash_path {
@@ -357,6 +365,8 @@ pub fn run(args: &Commands) -> Result<(), UnifiedError> {
                 } else {
                     Box::new(File::create(&dac)?)
                 };
+                writer.write_all(&[b'D', b'A', b'C', 1])?;
+                writer.write_all(&h3.to_le_bytes())?;
                 writer.write_all(&aho_corasik.serialize())?;
                 writer.flush()?;
             }

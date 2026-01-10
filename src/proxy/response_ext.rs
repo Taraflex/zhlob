@@ -77,7 +77,7 @@ pub impl<T> Response<T> {
 
                 if moved {
                     hh.set_unchecked(CONTENT_ENCODING, ce);
-                    hh.normalize_extra_for_patched_content(false);
+                    hh.normalize_extra_for_patched_content();
                 }
                 hh.remove(TRANSFER_ENCODING);
             } else {

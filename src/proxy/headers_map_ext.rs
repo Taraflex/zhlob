@@ -1,3 +1,4 @@
+use crate::{cli::CLI, dac::DAC};
 use bytes::Bytes;
 use easy_ext::ext;
 use encoding_rs::Encoding;
@@ -5,12 +6,10 @@ use hyper::{
     HeaderMap,
     header::{
         ACCEPT_RANGES, AsHeaderName, CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE, DATE,
-        ETAG, EXPIRES, HeaderValue, IntoHeaderName, VARY,
+        ETAG, EXPIRES, HeaderValue, IF_MATCH, IF_NONE_MATCH, IntoHeaderName, VARY,
     },
 };
 use std::{str::FromStr, time::SystemTime};
-
-use crate::cli::CLI;
 
 #[macro_export]
 macro_rules! in_headers {
@@ -126,24 +125,105 @@ pub impl HeaderMap<HeaderValue> {
             .unwrap_or_default()
     }
 
-    fn normalize_extra_for_patched_content(&mut self, change_etag_tag: bool) {
-        // Ослабляем ETag: если он есть и не начинается с W/, добавляем префикс
-        if change_etag_tag || (self.contains_key(ETAG) && !in_headers!(self, ETAG, "W/"*)) {
-            let etag = self
-                .get(ETAG)
-                .and_then(|e| e.to_str().ok())
-                .map(|e| e.trim_ascii().trim_start_matches("W/").trim_matches('"'))
-                .unwrap_or("");
+    fn inject_etag_marker(&mut self) {
+        if let Some(value) = self.get(ETAG) {
+            let marker = DAC
+                .get()
+                .map(|(etag_marker, _)| etag_marker.as_bytes())
+                .unwrap_or("zhlob~~".as_bytes());
 
-            self.set_unchecked(
-                ETAG,
-                if change_etag_tag {
-                    format!("W/\"zhlob-{}\"", etag)
-                } else {
-                    format!("W/\"{}\"", etag)
-                },
-            );
+            let etag = value.as_bytes();
+            let mut new_etag = Vec::with_capacity(etag.len() + marker.len());
+
+            let mut pos = 0;
+            if etag.starts_with(b"W/") {
+                new_etag.extend_from_slice(b"W/");
+                pos = 2;
+            }
+            if pos < etag.len() && etag[pos] == b'"' {
+                new_etag.push(b'"');
+                pos += 1;
+            }
+            new_etag.extend_from_slice(marker);
+            if pos < etag.len() {
+                new_etag.extend_from_slice(&etag[pos..]);
+            }
+            self.set_unchecked(ETAG, new_etag);
         }
+    }
+
+    fn strip_etag_marker(&mut self) {
+        for name in [IF_MATCH, IF_NONE_MATCH] {
+            let mut changed = false;
+            let mut out = Vec::new();
+
+            for val in self.get_all(&name) {
+                let b = val.as_bytes();
+                let mut i = 0;
+                let mut last_copy_pos = 0;
+
+                while i < b.len() {
+                    // 1. Пропускаем разделители
+                    while i < b.len() && (b[i] == b',' || b[i].is_ascii_whitespace()) {
+                        i += 1;
+                    }
+
+                    // 2. Определяем префикс
+                    let prefix_len = if b[i..].starts_with(b"W/\"") {
+                        3
+                    } else if b[i..].starts_with(b"W/") {
+                        2
+                    } else if b[i..].starts_with(b"\"") {
+                        1
+                    } else {
+                        0
+                    };
+
+                    i += prefix_len;
+
+                    // 3. Поиск и вырезание маркера
+                    if i < b.len() && b[i..].starts_with(b"zhlob~") {
+                        if let Some(pos) = b[i + 6..].iter().position(|&x| x == b'~') {
+                            // Сбрасываем накопленный кусок до начала маркера
+                            if i > last_copy_pos {
+                                out.extend_from_slice(&b[last_copy_pos..i]);
+                            }
+                            i += 6 + pos + 1;
+                            last_copy_pos = i;
+                            changed = true;
+                        }
+                    }
+
+                    // 4. Пропуск тела ETag до следующего разделителя
+                    // i >= 1 гарантировано условием prefix_len > 0
+                    let mut in_quotes = prefix_len > 0 && b[i - 1] == b'"';
+                    while i < b.len() {
+                        if b[i] == b'"' {
+                            in_quotes = !in_quotes;
+                        }
+                        if b[i] == b',' && !in_quotes {
+                            break;
+                        }
+                        i += 1;
+                    }
+                }
+
+                // Копируем остаток текущего заголовка
+                if last_copy_pos < b.len() {
+                    out.extend_from_slice(&b[last_copy_pos..]);
+                }
+                out.extend_from_slice(b", ");
+            }
+
+            if changed {
+                // Если мы здесь, значит out точно не пуст
+                out.truncate(out.len() - 2);
+                self.set_unchecked(name, out);
+            }
+        }
+    }
+
+    fn normalize_extra_for_patched_content(&mut self) {
         //из-за неоднозначности порядка применения (до TRANSFER_ENCODING: gzip, но после CONTENT_ENCODING: gzip) лучше удалить Content-MD5, так как может быть инвалидирован даже без смены алгоритма сжатия, из-за строгого переноса алгоритма сжатия в CONTENT_ENCODING
         self.remove("Content-MD5");
         self.remove(ACCEPT_RANGES);

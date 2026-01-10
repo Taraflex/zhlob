@@ -114,7 +114,7 @@ pub impl Parts {
             return m.0;
         }
 
-        let v = CLI.rechunk_html_size > 0
+        let v = CLI.html_rechunk_size > 0
             && self.can_be_patched(None)
             && in_headers!(self.headers, CONTENT_TYPE, "text/html"*)
             && !in_headers!(self.headers, ACCEPT_RANGES, "bytes");
@@ -124,9 +124,10 @@ pub impl Parts {
     }
 
     fn response_from_bytes(mut self, body: Bytes) -> BoxedResponse {
-        self.headers.normalize_extra_for_patched_content(true);
+        self.headers.inject_etag_marker();
+        self.headers.normalize_extra_for_patched_content();
 
-        let chunk_size = CLI.rechunk_html_size;
+        let chunk_size = CLI.html_rechunk_size;
 
         let len = body.len();
         if len > chunk_size && self.must_be_rechunkified() {
@@ -161,7 +162,7 @@ pub impl Parts {
         S: Stream<Item = Result<Frame<Bytes>, hyper::Error>> + Send + Sync + 'static,
     {
         if self.must_be_rechunkified() {
-            let chunk_size = CLI.rechunk_html_size;
+            let chunk_size = CLI.html_rechunk_size;
             //for none RANGE responses rechunkify and send as chunked response
             self.remove(CONTENT_LENGTH);
             Response::from_parts(
